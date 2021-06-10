@@ -1,0 +1,135 @@
+$folder = "Desktop",
+"Downloads",
+"Favorites",
+"Documents",
+"Music",
+"Pictures",
+"Videos",
+"AppData\Local\Google"
+
+
+$username = gc env:username
+$userprofile = gc env:userprofile
+$appData = gc env:localAPPDATA
+
+$PromptUserOption = Read-Host "Enter 1 for backup. Enter 2 for restore."
+###### Restore data section ######
+function restoreUserData{
+write-host -ForegroundColor green "Restoring data to local machine for $username"
+		foreach ($f in $folder)
+		{	
+			$currentLocalFolder = $userprofile + "\" + $f
+			$currentRemoteFolder = $destination + "\" + $username + "\" + $f
+			write-host -ForegroundColor cyan "  $f..."
+			Copy-Item -ErrorAction silentlyContinue -recurse $currentRemoteFolder $userprofile
+			
+			if ($f -eq "AppData\Local\Mozilla") { rename-item $currentLocalFolder "$currentLocalFolder.old" }
+			if ($f -eq "AppData\Roaming\Mozilla") { rename-item $currentLocalFolder "$currentLocalFolder.old" }
+			if ($f -eq "AppData\Local\Google") { rename-item $currentLocalFolder "$currentLocalFolder.old" }
+		
+		}
+		rename-item "$destination\$username" "$destination\$username.restored"
+		write-host -ForegroundColor green "Restore Complete!"
+}
+
+if ($PromptUserOption -eq 2) 
+{ 
+    if(Test-Path H:\$username\){
+	$caption = "Choose Action";
+	$message = "A backup folder for $username was found in the H: drive, would you like to restore the data to the local machine?";
+	$Yes = new-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Yes";
+	$No = new-Object System.Management.Automation.Host.ChoiceDescription "&No","No";
+	$choices = [System.Management.Automation.Host.ChoiceDescription[]]($Yes,$No);
+	$answer = $host.ui.PromptForChoice($caption,$message,$choices,0)
+}
+	if ($answer -eq 0) 
+	{
+		restoreUserData
+	}
+	
+	else
+	{
+        Write-Host -ForegroundColor green "Please specify the backup folder path"
+    
+        Do {
+        #Prompts user to locate their saved backup
+        $backupPath = Read-Host ' '
+
+        #Checks to see if the output exists
+        If (!(Test-Path $backupPath)) {
+            "Backup file not found or does not exist. Please try again"
+        } 
+
+        #ends the loop if the file path exists
+        } Until (Test-Path $backupPath)
+        #//////////////////////////////////////////////////////////////
+		#write-host -ForegroundColor yellow "Aborting process"
+		#exit
+
+        restoreUserData
+	}
+	Write-Host -ForegroundColor red "End"
+	
+}
+
+###### Backup Data section ########
+elseif($PromptUserOption -eq 1)
+{ 
+Do {
+#Prompts user where to save their files
+$destination = Read-Host 'Please specify the output path. (Ex: C:\Users\Default\Desktop\) or hit ENTER for H:\ drive'
+
+#Checks to see if the output exists
+If($destination -eq ""){
+    $destination = "H:"
+}
+
+If (!(Test-Path $destination)) {
+    if($destination -eq "H:"){
+    write-host -ForegroundColor DarkRed "Error writting to the H: drive. Either there is not internet connection or the user does not have a drive!"
+    }
+    else{#
+    write-host -ForegroundColor DarkRed "Path does not exist. Please try again."
+
+    }
+} 
+
+#ends the loop if the file path exists
+} Until (Test-Path $destination)
+
+		
+	Write-Host -ForegroundColor green "Please close out all application and save any open apps. Press any key to continue..."
+
+    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+	write-host -ForegroundColor green "Backing up data from local machine for $username"
+	
+	foreach ($f in $folder)
+	{	
+		$currentLocalFolder = $userprofile + "\" + $f
+		$currentRemoteFolder = $destination + "\" + $username + "\" + $f
+		$currentFolderSize = (Get-ChildItem -ErrorAction silentlyContinue $currentLocalFolder -Recurse -Force | Measure-Object -ErrorAction silentlyContinue -Property Length -Sum ).Sum / 1MB
+		$currentFolderSizeRounded = [System.Math]::Round($currentFolderSize)
+		write-host -ForegroundColor cyan "  $f... ($currentFolderSizeRounded MB)"
+		Copy-Item -ErrorAction silentlyContinue -recurse $currentLocalFolder $currentRemoteFolder
+	}
+	
+	
+	
+	$oldStylePST = [IO.Directory]::GetFiles($appData + "\Microsoft\Outlook", "*.pst") 
+	foreach($pst in $oldStylePST)	
+	{ 
+		if ((test-path -path ($destination + "\" + $username + "\Documents\Outlook Files\oldstyle")) -eq 0){new-item -type directory -path ($destination + "\" + $username + "\Documents\Outlook Files\oldstyle") | out-null}
+		write-host -ForegroundColor yellow "  $pst..."
+		Copy-Item $pst ($destination + "\" + $username + "\Documents\Outlook Files\oldstyle")
+	}    
+	
+	write-host -ForegroundColor green "Backup is done. Press any key to close..."
+    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	
+}
+else{
+    write-host -ForegroundColor DarkYellow "In correct option was selected. Exiting..."
+    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit
+}
